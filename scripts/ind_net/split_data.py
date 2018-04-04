@@ -28,13 +28,13 @@ print('category no.%d' % len(lines))
 
 import numpy as np
 
-data_train = np.array([], dtype=np.uint8).reshape(0, 2352)
+data_train = np.array([], dtype=np.uint8).reshape(0, 49152)
 label_train = np.array([], dtype=np.uint8)
 
-data_val = np.array([], dtype=np.uint8).reshape(0, 2352)
+data_val = np.array([], dtype=np.uint8).reshape(0, 49152)
 label_val = np.array([], dtype=np.uint8)
 
-data_test = np.array([], dtype=np.uint8).reshape(0, 2352)
+data_test = np.array([], dtype=np.uint8).reshape(0, 49152)
 label_test = np.array([], dtype=np.uint8)
 
 print(lines)
@@ -55,9 +55,9 @@ for idx, line in enumerate(lines):
     print (num_train, num_val, num_test)
     # generate split
 
-    train_category = data_category[:num_train].reshape(-1, 2352)
-    val_category = data_category[num_train:num_train+num_val].reshape(-1, 2352)
-    test_category = data_category[num_train+num_val:num_train+num_val+num_test].reshape(-1, 2352)
+    train_category = data_category[:num_train].reshape(-1, 49152)
+    val_category = data_category[num_train:num_train+num_val].reshape(-1, 49152)
+    test_category = data_category[num_train+num_val:num_train+num_val+num_test].reshape(-1, 49152)
 
     print(data_train.shape, train_category.shape)
 

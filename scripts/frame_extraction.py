@@ -88,7 +88,7 @@ total_cnt = 0
 fail_cnt  = 0
 output_files = [""] * len(left_files)
 lookup_table = {"2-1": 1, "2-3": 2, "2-4": 3, "2-5": 4, "2-6": 5, "2-8-2": 6, "2-9": 7, "2-10": 8}
-#all_files = []
+all_files = []
 
 for a, direction in enumerate(all_files):
 	for i in range(len(direction)):
@@ -107,7 +107,6 @@ for a, direction in enumerate(all_files):
 				# print(query)
 				cur.execute(query)
 				
-
 				if not cur.rowcount == 0:
 					area_id = cur.fetchone()[0]
 					success, image = vidcap.read()
@@ -120,7 +119,7 @@ for a, direction in enumerate(all_files):
 
 						conn = psycopg2.connect(conn_string)
 						cur = conn.cursor()
-						query = '''insert into penn_station.image_lookup_50ms values('%s', %s, '%s', '%s')''' % (filename, area_id, str(area_id + 1) + str(a + 1), os.path.join(os.getcwd(), filename))
+						query = '''insert into penn_station.image_lookup_50ms values('%s', %s, '%s', '%s', '%s', '%s')''' % (filename, area_id, str(area_id + 1) + str(a + 1), os.path.join(os.getcwd(), filename), coord[0], coord[1])
 						# print(query)
 						cur.execute(query)
 						cur.close()
@@ -143,7 +142,7 @@ for a, direction in enumerate(all_files):
 
 conn = psycopg2.connect(conn_string)
 cur = conn.cursor()
-query = '''select distinct(spec_id) from penn_station.image_lookup_50ms; '''
+query = '''select spec_id, count(spec_id) as cnt1 from penn_station.image_lookup_50ms group by spec_id having count(spec_id) > 100; '''
 # print(query)
 cur.execute(query)
 results = cur.fetchall()
@@ -160,14 +159,23 @@ for spec_id in results:
 	# print(query)
 	cur.execute(query)
 	images = cur.fetchall()
+	
+	output_dir = os.path.join(os.getcwd(), '..', 'categories', spec_id[0])
+	if not os.path.exists(output_dir):
+		os.makedirs(output_dir)
+
 	spec_cat[spec_id[0]] = []
 	for image in images:
-		spec_cat[spec_id[0]].append(image[3])
+		resized_image = cv2.resize(np.array(Image.open(image[3])), dsize=(128, 128), interpolation=cv2.INTER_CUBIC)
+		cv2.imwrite(os.path.join(output_dir, os.path.basename(image[3])), resized_image)
 	cur.close()
 	conn.commit()
-	x = np.array([cv2.resize(np.array(Image.open(fname)), dsize=(128, 128), interpolation=cv2.INTER_CUBIC) for fname in spec_cat[spec_id[0]]])
-# 	with open(os.path.join(os.getcwd(), '..', 'npy', ), 'wb') as f:
-	x.dump(os.path.join(os.getcwd(), '..', 'npy', spec_id[0] + '.npy'))
+
+
+#	for bolei's code
+# 	x = np.array([cv2.resize(np.array(Image.open(fname)), dsize=(128, 128), interpolation=cv2.INTER_CUBIC) for fname in spec_cat[spec_id[0]]])
+# # 	with open(os.path.join(os.getcwd(), '..', 'npy', ), 'wb') as f:
+# 	x.dump(os.path.join(os.getcwd(), '..', 'npy', spec_id[0] + '.npy'))
 
 
 

@@ -31,12 +31,12 @@ import pdb
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batchSz', type=int, default=128)
+    parser.add_argument('--batchSz', type=int, default=2)
     parser.add_argument('--nEpochs', type=int, default=300)
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('--save', default='work/penn_station')
     parser.add_argument('--split',default='../datasplit/51_split.npy.npz')
-    parser.add_argument('--nClasses', type=int, default=116)
+    parser.add_argument('--nClasses', type=int, default=105)
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--opt', type=str, default='sgd',
                         choices=('sgd', 'adam', 'rmsprop'))
@@ -62,13 +62,13 @@ def main():
     data_quickdraw = np.load(args.split)
     data_train = data_quickdraw['data_train'].astype(np.float32)
     # data_train = data_quickdraw['data_train'].astype(np.float32)
-    data_train = data_train.reshape((data_train.shape[0], 3, 28, 28))
+    data_train = data_train.reshape((data_train.shape[0], 3, 128, 128))
     data_train = torch.from_numpy(data_train)
     label_train = data_quickdraw['label_train']
     label_train = torch.from_numpy(label_train.astype(int))
     data_val = data_quickdraw['data_val'].astype(np.float32)
     # data_val = data_quickdraw['data_val'].astype(np.float32)
-    data_val = data_val.reshape((data_val.shape[0], 3, 28, 28))
+    data_val = data_val.reshape((data_val.shape[0], 3, 128, 128))
     data_val = torch.from_numpy(data_val)
     label_val = data_quickdraw['label_val']
     label_val = torch.from_numpy(label_val.astype(int))
