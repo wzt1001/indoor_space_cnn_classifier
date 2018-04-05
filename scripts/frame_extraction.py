@@ -132,8 +132,9 @@ for cam_id, direction in enumerate(all_files):
 		while True:
 			current_line = records[lookup_table[os.path.splitext((os.path.basename(direction[clip_id])))[0]]]
 			vidcap.set(cv2.CAP_PROP_POS_MSEC, (count * frame_interval) )
-			coord = gen_coord(current_line, count * 1.0 / frame_interval * 1000)
-			# print(count * 1.0 / frame_interval * 1000)
+			current_time = count * 1.0 * frame_interval / 1000
+			coord = gen_coord(current_line, current_time)
+			# print(current_line, count * 1.0 * frame_interval / 1000)
 			if coord is not None:
 				conn = psycopg2.connect(conn_string)
 				cur = conn.cursor()
@@ -185,7 +186,7 @@ for cam_id, direction in enumerate(all_files):
 					fail_cnt += 1
 				
 			else:
-				print("break because coord is not None")
+				print("break because coord is None")
 				break
 			if cv2.waitKey(10) == 27: # exit if Escape is hit
 				break
