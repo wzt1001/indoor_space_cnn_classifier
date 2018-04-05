@@ -22,6 +22,9 @@ def gen_coord(line, time):
 		coord_x = (line["points"][index][0] - line["points"][index - 1][0]) * percentage + line["points"][index - 1][0]
 		coord_y = (line["points"][index][1] - line["points"][index - 1][1]) * percentage + line["points"][index - 1][1]
 		return (coord_x, coord_y)
+#preset settings
+frame_interval = 40
+
 
 # connect to server database
 conn_string = "host='localhost' dbname='indoor_position' user='postgres' password='tiancai' port='5432'"
@@ -57,7 +60,7 @@ conn.commit()
 for item in results:
 	records[item[0]]["points"].append((item[2], item[3]))
 # print(records)
-print("parameters loaded...\nbegin categorizing")
+print("--- parameters loaded...\n--- begin categorizing")
 # for points in results:
 
 place_title = "penn_station"
@@ -68,7 +71,7 @@ forward_dir = os.path.join(root_dir, "3")
 right_dir   = os.path.join(root_dir, "4")
 back_dir    = os.path.join(root_dir, "5")
 
-output_dir  	= os.path.join(root_dir, "extracted_50ms")
+output_dir  	= os.path.join(root_dir, "extracted_%sms" % str(frame_interval))
 
 left_files 	    = [join(left_dir, f) for f in listdir(left_dir) if isfile(join(left_dir, f))]
 forward_files 	= [join(forward_dir, f) for f in listdir(forward_dir) if isfile(join(forward_dir, f))]
@@ -76,7 +79,7 @@ right_files 	= [join(right_dir, f) for f in listdir(right_dir) if isfile(join(ri
 back_files 		= [join(back_dir, f) for f in listdir(back_dir) if isfile(join(back_dir, f))]
 
 if not len(left_files) == len(forward_files) == len(right_files) == len(back_files) == len(top_files):
-	print("file count not consistent")
+	print("!!! file count not consistent")
 # print(left_files, forward_files, right_files, back_files, top_files)
 if not os.path.exists(output_dir):
 	os.makedirs(output_dir)
@@ -87,26 +90,57 @@ all_files = [left_files, forward_files, right_files, back_files]
 total_cnt = 0
 fail_cnt  = 0
 output_files = [""] * len(left_files)
-lookup_table = {"2-1": 1, "2-3": 2, "2-4": 3, "2-5": 4, "2-6": 5, "2-8-2": 6, "2-9": 7, "2-10": 8}
-all_files = []
+lookup_table = {"2-1": 0, "2-3": 1, "2-4": 2, "2-5": 3, "2-6": 4, "2-8-2": 5, "2-9": 6, "2-10": 7}
+# all_files = []
 
-for a, direction in enumerate(all_files):
-	for i in range(len(direction)):
-		vidcap = cv2.VideoCapture(direction[i])
-		success, image = vidcap.read()
+# create table to store image infos
+conn = psycopg2.connect(conn_string)
+cur = conn.cursor()
+query = '''
+	drop table if exists penn_station.image_lookup_%sms; create table penn_station.image_lookup_%sms
+	(
+	  image_name text,
+	  id integer,
+	  spec_id text,
+	  path text,
+	  lat double precision,
+	  lon double precision
+	);
+
+	drop table if exists penn_station.missing; create table penn_station.missing
+	(
+	  lat double precision,
+	  lon double precision
+	)
+
+''' % (str(frame_interval), str(frame_interval))
+# print(query)
+cur.execute(query)
+cur.close()
+conn.commit()
+print("--- table penn_station.image_lookup_%sms created" % (str(frame_interval)))
+
+for cam_id, direction in enumerate(all_files):
+	for clip_id in range(len(direction)):
+		print("------ begin extracting from cam_id: %s, clip_id %s" % (cam_id, clip_id) )
+		vidcap = cv2.VideoCapture(direction[clip_id])
+		# success, image = vidcap.read()
 		count = 0
-		success = True
-		while success:
-			vidcap.set(cv2.CAP_PROP_POS_MSEC, (count*50))
-			# print(os.path.splitext((os.path.basename(direction[i])))[0])
-			coord = gen_coord(records[lookup_table[os.path.splitext((os.path.basename(direction[i])))[0]]], count * 0.05)
+		# if not success:
+		# 	print("video reading error for %s" % direction[clip_id])
+		# 	continue
+		while True:
+			current_line = records[lookup_table[os.path.splitext((os.path.basename(direction[clip_id])))[0]]]
+			vidcap.set(cv2.CAP_PROP_POS_MSEC, (count * frame_interval) )
+			coord = gen_coord(current_line, count * 1.0 / frame_interval * 1000)
+			# print(count * 1.0 / frame_interval * 1000)
 			if coord is not None:
 				conn = psycopg2.connect(conn_string)
 				cur = conn.cursor()
 				query = '''select id from penn_station.areas a where ST_Intersects(ST_PointFromText('POINT(%s %s)', 4326), ST_Transform(a.geom, 4326)) is True''' % (coord[0], coord[1])
 				# print(query)
 				cur.execute(query)
-				
+
 				if not cur.rowcount == 0:
 					area_id = cur.fetchone()[0]
 					success, image = vidcap.read()
@@ -114,26 +148,44 @@ for a, direction in enumerate(all_files):
 					conn.commit()
 
 					if (image is not None):
-						filename = "frame%s_scene%s_%s.jpg" % (count, i, str(a + 1))
+						spec_id  = str(area_id) + str(cam_id)
+						filename = "%s_%s_%s.png" % (spec_id, str(cam_id), count)
 						cv2.imwrite(filename, image)     # save frame as JPEG file
 
 						conn = psycopg2.connect(conn_string)
 						cur = conn.cursor()
-						query = '''insert into penn_station.image_lookup_50ms values('%s', %s, '%s', '%s', '%s', '%s')''' % (filename, area_id, str(area_id + 1) + str(a + 1), os.path.join(os.getcwd(), filename), coord[0], coord[1])
+						query = '''insert into penn_station.image_lookup_%sms values('%s', %s, '%s', '%s', %s, %s)''' % (str(frame_interval), filename, area_id, spec_id, os.path.join(os.getcwd(), filename), coord[0], coord[1])
 						# print(query)
 						cur.execute(query)
 						cur.close()
 						conn.commit()
 
-						stdout.write("\rfor camera %s, scene %s, saved cnt %s, not in area cnt %s, in area %s" % (str(a + 1), i, total_cnt - fail_cnt, fail_cnt, area_id))
+						stdout.write("\rcam_id %s, area_id %s, saved cnt %s, not_in_any_area cnt %s, clip_id %s" % (str(cam_id), area_id, total_cnt - fail_cnt, fail_cnt, clip_id))
 						stdout.flush()
+
+					else:
+						print("end of one video")
+						break
 
 				else:
 					cur.close()
 					conn.commit()
+
+					conn = psycopg2.connect(conn_string)
+					cur = conn.cursor()
+					query = '''insert into penn_station.missing values(%s, %s)''' % (coord[0], coord[1])
+					# print(query)
+					cur.execute(query)
+					cur.close()
+					conn.commit()
+
+					stdout.write("\rcam_id %s, saved cnt %s, not_in_any_area cnt %s, clip_id %s" % (str(cam_id),  total_cnt - fail_cnt, fail_cnt, clip_id))
+					stdout.flush()
+
 					fail_cnt += 1
 				
 			else:
+				print("break because coord is not None")
 				break
 			if cv2.waitKey(10) == 27: # exit if Escape is hit
 				break
@@ -142,7 +194,7 @@ for a, direction in enumerate(all_files):
 
 conn = psycopg2.connect(conn_string)
 cur = conn.cursor()
-query = '''select spec_id, count(spec_id) as cnt1 from penn_station.image_lookup_50ms group by spec_id having count(spec_id) > 100; '''
+query = '''select spec_id, count(spec_id) as cnt1 from penn_station.image_lookup_%sms group by spec_id having count(spec_id) > 100; ''' % str(frame_interval)
 # print(query)
 cur.execute(query)
 results = cur.fetchall()
@@ -155,7 +207,7 @@ spec_cat = {}
 for spec_id in results:
 	conn = psycopg2.connect(conn_string)
 	cur = conn.cursor()
-	query = '''select * from penn_station.image_lookup_50ms where spec_id = '%s'; ''' % (spec_id[0])
+	query = '''select * from penn_station.image_lookup_%sms where spec_id = '%s'; ''' % (str(frame_interval), spec_id[0])
 	# print(query)
 	cur.execute(query)
 	images = cur.fetchall()
