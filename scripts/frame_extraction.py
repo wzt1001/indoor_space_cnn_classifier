@@ -23,7 +23,7 @@ def gen_coord(line, time):
 		coord_y = (line["points"][index][1] - line["points"][index - 1][1]) * percentage + line["points"][index - 1][1]
 		return (coord_x, coord_y)
 #preset settings
-frame_interval = 40
+frame_interval = 50
 
 
 # connect to server database
@@ -91,34 +91,35 @@ total_cnt = 0
 fail_cnt  = 0
 output_files = [""] * len(left_files)
 lookup_table = {"2-1": 0, "2-3": 1, "2-4": 2, "2-5": 3, "2-6": 4, "2-8-2": 5, "2-9": 6, "2-10": 7}
-# all_files = []
 
 # create table to store image infos
-conn = psycopg2.connect(conn_string)
-cur = conn.cursor()
-query = '''
-	drop table if exists penn_station.image_lookup_%sms; create table penn_station.image_lookup_%sms
-	(
-	  image_name text,
-	  id integer,
-	  spec_id text,
-	  path text,
-	  lat double precision,
-	  lon double precision
-	);
+# conn = psycopg2.connect(conn_string)
+# cur = conn.cursor()
+# query = '''
+# 	drop table if exists penn_station.image_lookup_%sms; create table penn_station.image_lookup_%sms
+# 	(
+# 	  image_name text,
+# 	  id integer,
+# 	  spec_id text,
+# 	  path text,
+# 	  lat double precision,
+# 	  lon double precision
+# 	);
 
-	drop table if exists penn_station.missing; create table penn_station.missing
-	(
-	  lat double precision,
-	  lon double precision
-	)
+# 	drop table if exists penn_station.missing; create table penn_station.missing
+# 	(
+# 	  lat double precision,
+# 	  lon double precision
+# 	)
 
-''' % (str(frame_interval), str(frame_interval))
-# print(query)
-cur.execute(query)
-cur.close()
-conn.commit()
-print("--- table penn_station.image_lookup_%sms created" % (str(frame_interval)))
+# ''' % (str(frame_interval), str(frame_interval))
+# # print(query)
+# cur.execute(query)
+# cur.close()
+# conn.commit()
+# print("--- table penn_station.image_lookup_%sms created" % (str(frame_interval)))
+all_files = [[], forward_files, right_files, back_files]
+all_files = []
 
 for cam_id, direction in enumerate(all_files):
 	for clip_id in range(len(direction)):
@@ -149,6 +150,8 @@ for cam_id, direction in enumerate(all_files):
 					conn.commit()
 
 					if (image is not None):
+						#print(count * frame_interval)
+
 						spec_id  = str(area_id) + str(cam_id)
 						filename = "%s_%s_%s.png" % (spec_id, str(cam_id), count)
 						cv2.imwrite(filename, image)     # save frame as JPEG file
@@ -165,8 +168,14 @@ for cam_id, direction in enumerate(all_files):
 						stdout.flush()
 
 					else:
-						print("end of one video")
-						break
+						print(count * frame_interval, "disrupted")
+						count += 1
+						#total_cnt += 1
+						#fail_cnt += 1
+						#continue
+						#print(success, image)
+						#print("\nend of one video")
+						continue
 
 				else:
 					cur.close()
@@ -219,7 +228,7 @@ for spec_id in results:
 
 	spec_cat[spec_id[0]] = []
 	for image in images:
-		resized_image = cv2.resize(np.array(Image.open(image[3])), dsize=(128, 128), interpolation=cv2.INTER_CUBIC)
+		resized_image = cv2.resize(np.array(Image.open(image[3])), dsize=(200, 200), interpolation=cv2.INTER_CUBIC)
 		cv2.imwrite(os.path.join(output_dir, os.path.basename(image[3])), resized_image)
 	cur.close()
 	conn.commit()
