@@ -31,19 +31,19 @@ import pdb
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batchSz', type=int, default=2)
+    parser.add_argument('--batchSz', type=int, default=32)
     parser.add_argument('--nEpochs', type=int, default=300)
     parser.add_argument('--no-cuda', action='store_true')
-    parser.add_argument('--save', default='work/penn_station')
-    parser.add_argument('--split',default='../datasplit/51_split.npy.npz')
-    parser.add_argument('--nClasses', type=int, default=105)
+    parser.add_argument('--save', default='work\\penn_station')
+    parser.add_argument('--split',default='C:\\data\\indoor_recognition\\data\\penn_station\\datasplit\\274_split_128.npy.npz')
+    parser.add_argument('--nClasses', type=int, default=210)
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--opt', type=str, default='sgd',
                         choices=('sgd', 'adam', 'rmsprop'))
     args = parser.parse_args()
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
-    args.save = args.save or 'work/densenet.base'
+    args.save = args.save or 'work\\densenet.base'
     setproctitle.setproctitle(args.save)
 
     torch.manual_seed(args.seed)

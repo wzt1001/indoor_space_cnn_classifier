@@ -66,14 +66,14 @@ print("--- parameters loaded...\n--- begin categorizing")
 place_title = "penn_station"
 root_dir  	= os.path.join(os.getcwd(), "..", "data", place_title)
 
-left_dir    = os.path.join(root_dir, "1")
+left_dir	= os.path.join(root_dir, "1")
 forward_dir = os.path.join(root_dir, "3")
 right_dir   = os.path.join(root_dir, "4")
-back_dir    = os.path.join(root_dir, "5")
+back_dir	= os.path.join(root_dir, "5")
 
 output_dir  	= os.path.join(root_dir, "extracted_%sms" % str(frame_interval))
 
-left_files 	    = [join(left_dir, f) for f in listdir(left_dir) if isfile(join(left_dir, f))]
+left_files 		= [join(left_dir, f) for f in listdir(left_dir) if isfile(join(left_dir, f))]
 forward_files 	= [join(forward_dir, f) for f in listdir(forward_dir) if isfile(join(forward_dir, f))]
 right_files 	= [join(right_dir, f) for f in listdir(right_dir) if isfile(join(right_dir, f))]
 back_files 		= [join(back_dir, f) for f in listdir(back_dir) if isfile(join(back_dir, f))]
@@ -154,7 +154,7 @@ for cam_id, direction in enumerate(all_files):
 
 						spec_id  = str(area_id) + str(cam_id)
 						filename = "%s_%s_%s.png" % (spec_id, str(cam_id), count)
-						cv2.imwrite(filename, image)     # save frame as JPEG file
+						cv2.imwrite(filename, image)	 # save frame as JPEG file
 
 						conn = psycopg2.connect(conn_string)
 						cur = conn.cursor()
@@ -214,40 +214,87 @@ conn.commit()
 
 spec_cat = {}
 
-for spec_id in results:
+# for shitty classifer code
+# for spec_id in results:
+# 	conn = psycopg2.connect(conn_string)
+# 	cur = conn.cursor()
+# 	query = '''select * from penn_station.image_lookup_%sms where spec_id = '%s'; ''' % (str(frame_interval), spec_id[0])
+# 	# print(query)
+# 	cur.execute(query)
+# 	images = cur.fetchall()
+	
+# 	output_dir = os.path.join(os.getcwd(), '..', 'categories', spec_id[0])
+# 	if not os.path.exists(output_dir):
+# 		os.makedirs(output_dir)
+
+# 	spec_cat[spec_id[0]] = []
+# 	for image in images:
+# 		resized_image = cv2.resize(np.array(Image.open(image[3])), dsize=(200, 200), interpolation=cv2.INTER_CUBIC)
+# 		cv2.imwrite(os.path.join(output_dir, os.path.basename(image[3])), resized_image)
+# 	cur.close()
+# 	conn.commit()
+
+
+#	for bolei's code
+per_train = 0.8
+per_val = 0.08
+per_test = 0.1
+
+data_train = np.array([], dtype=np.uint8).reshape(0, 49152)
+label_train = np.array([], dtype=np.uint8)
+
+data_val = np.array([], dtype=np.uint8).reshape(0, 49152)
+label_val = np.array([], dtype=np.uint8)
+
+data_test = np.array([], dtype=np.uint8).reshape(0, 49152)
+label_test = np.array([], dtype=np.uint8)
+
+for idx, spec_id in enumerate(results):
 	conn = psycopg2.connect(conn_string)
 	cur = conn.cursor()
 	query = '''select * from penn_station.image_lookup_%sms where spec_id = '%s'; ''' % (str(frame_interval), spec_id[0])
 	# print(query)
+
+
 	cur.execute(query)
 	images = cur.fetchall()
-	
-	output_dir = os.path.join(os.getcwd(), '..', 'categories', spec_id[0])
-	if not os.path.exists(output_dir):
-		os.makedirs(output_dir)
 
-	spec_cat[spec_id[0]] = []
-	for image in images:
-		resized_image = cv2.resize(np.array(Image.open(image[3])), dsize=(200, 200), interpolation=cv2.INTER_CUBIC)
-		cv2.imwrite(os.path.join(output_dir, os.path.basename(image[3])), resized_image)
-	cur.close()
-	conn.commit()
+	idx = int(idx)
+	category = spec_id
+
+	# print(images)
+	data_category = np.array([cv2.resize(np.array(Image.open(fname[3])), dsize=(128, 128), interpolation=cv2.INTER_CUBIC) for fname in images])	
+
+	# data_category = np.load(file_np).astype(np.int8)
+	total_cnt = len(data_category)
+	num_train = int(per_train * total_cnt)
+	num_val = int(per_val * total_cnt)
+	num_test = int(per_test * total_cnt)
+	print (num_train, num_val, num_test)
+	# generate split
+
+	train_category = data_category[:num_train].reshape(-1, 49152)
+	val_category = data_category[num_train:num_train+num_val].reshape(-1, 49152)
+	test_category = data_category[num_train+num_val:num_train+num_val+num_test].reshape(-1, 49152)
+
+	print(data_train.shape, train_category.shape)
+
+	# concatenate: TODO: change this to pre-assign to speed up
+	data_train = np.concatenate((data_train, train_category), axis=0)
+	label_train = np.concatenate((label_train, np.ones((num_train,), dtype=int) * idx), axis=0)
+
+	data_val = np.concatenate((data_val, val_category), axis=0)
+	label_val = np.concatenate((label_val, np.ones((num_val,), dtype=int) * idx), axis=0)
+
+	data_test = np.concatenate((data_test, test_category), axis=0)
+	label_test = np.concatenate((label_test, np.ones((num_test,), dtype=int) * idx), axis=0)
+
+	print('num_train=%d num_val=%d num_test=%d' % (data_train.shape[0], data_val.shape[0], data_test.shape[0]))
+
+# 	with open(os.path.join(os.getcwd(), '..', 'npy', ), 'wb') as f:
+output_dir = os.path.join(os.getcwd(), '..', 'datasplit')
+if not os.path.exists(output_dir):
+	os.makedirs(output_dir)
+np.savez( os.path.join(output_dir, '%s_split_%s.npy' % (num_train, "128")), data_train=data_train, label_train=label_train, data_val=data_val, label_val=label_val, data_test=data_test, label_test=label_test)
 
 
-#	for bolei's code
-# 	x = np.array([cv2.resize(np.array(Image.open(fname)), dsize=(128, 128), interpolation=cv2.INTER_CUBIC) for fname in spec_cat[spec_id[0]]])
-# # 	with open(os.path.join(os.getcwd(), '..', 'npy', ), 'wb') as f:
-# 	x.dump(os.path.join(os.getcwd(), '..', 'npy', spec_id[0] + '.npy'))
-
-
-
-
-# for i in range(len(left_files)):
-#	s = pano.Stitch(output_files[i][:-1])
-# 	s.leftshift()
-#	s.showImage('left')
-#	s.rightshift()
-#	print ("done")
-#	cv2.imwrite("scene%s.jpg" % i, s.leftImage)
-#	print ("image written")
-#	cv2.destroyAllWindows()

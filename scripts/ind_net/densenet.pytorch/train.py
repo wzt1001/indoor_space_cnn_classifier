@@ -79,6 +79,7 @@ def main():
 
     print('  + Number of params: {}'.format(
         sum([p.data.nelement() for p in net.parameters()])))
+    
     if args.cuda:
         net = net.cuda()
 

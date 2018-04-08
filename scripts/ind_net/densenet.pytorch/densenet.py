@@ -66,10 +66,10 @@ class DenseNet(nn.Module):
             nDenseBlocks //= 2
 
         nChannels = 2*growthRate
-        self.conv1 = nn.Conv2d(3, nChannels, kernel_size=3, padding=1,
+        self.conv1 = nn.Conv2d(3, nChannels, kernel_size=7, stride = 4, padding=3,
                                bias=False)
         # self.conv1 = nn.Conv2d(1, nChannels, kernel_size=3, padding=1,
-        #                        bias=False)
+        #                  bias=False)
         self.dense1 = self._make_dense(nChannels, growthRate, nDenseBlocks, bottleneck)
         nChannels += nDenseBlocks*growthRate
         nOutChannels = int(math.floor(nChannels*reduction))
@@ -114,5 +114,12 @@ class DenseNet(nn.Module):
         out = self.trans2(self.dense2(out))
         out = self.dense3(out)
         out = torch.squeeze(F.avg_pool2d(F.relu(self.bn1(out)), 7))
+        # print(out.size())
         out = F.log_softmax(self.fc(out))
         return out
+
+def densenet169(pretrained=False, **kwargs):
+
+    model = DenseNet(growthRate=12, depth=100, reduction=0.5,
+                            bottleneck=True, nClasses=210)
+    return model
