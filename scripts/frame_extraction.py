@@ -11,7 +11,7 @@ from PIL import Image
 from math import floor
 import hashlib
 import random
-
+from multiprocessing.dummy import Pool as ThreadPool
 
 
 # generating the accurate geo-coordinates for a specific time poing
@@ -135,12 +135,14 @@ if not os.path.exists(output_dir):
 os.chdir(output_dir)
 
 all_files = [left_files, forward_files, right_files, back_files]
+
+global total_cnt
+global fail_cnt
+global lookup_table
+
 total_cnt = 0
 fail_cnt  = 0
-output_files = [""] * len(left_files)
 lookup_table = {"2-1": 0, "2-3": 1, "2-4": 2, "2-5": 3, "2-6": 4, "2-8-2": 5, "2-9": 6, "2-10": 7}
-
-
 
 # create table to store image infos
 conn = psycopg2.connect(conn_string)
@@ -178,7 +180,14 @@ print("--- table penn_station.image_lookup_%sms created" % (str(frame_interval))
 all_files = [left_files, forward_files, right_files, back_files]
 # all_files = []
 
-for cam_id, direction in enumerate(all_files):
+def extract(input_direction):
+
+	global total_cnt
+	global fail_cnt
+	global lookup_table
+	cam_id    = input_direction[0]
+	direction = input_direction[1]
+	# for cam_id, direction in enumerate(all_files):
 	for clip_id in range(len(direction)):
 		print("------ begin extracting from cam_id: %s, clip_id %s" % (cam_id, clip_id) )
 		vidcap = cv2.VideoCapture(direction[clip_id])
@@ -227,7 +236,7 @@ for cam_id, direction in enumerate(all_files):
 							image_ins = crop_result["augmented_images"][crop_item]
 
 							h = hashlib.new('ripemd160')
-							h.update(str(image))
+							h.update(str(image_ins))
 							image_name = h.hexdigest()
 							filename_level_1 = image_name[:2]
 							filename_level_2 = image_name[2:4]
@@ -246,14 +255,15 @@ for cam_id, direction in enumerate(all_files):
 							query = '''insert into penn_station.image_lookup_%sms values('%s', %s, '%s', '%s', %s, %s, %s, '%s', '%s', '%s', '%s')''' % (str(frame_interval), image_name, area_id, spec_id, os.path.join(image_dir, image_name), coord[0], coord[1], original_ins, w_h_ratio_ins, area_ins, centerpoint_x_ins, centerpoint_y_ins)
 							# print(query)
 							cur.execute(query)
-							cur.close()
-							conn.commit()
+							
 
-							stdout.write("\rcam_id %s, area_id %s, saved cnt %s, not_in_any_area cnt %s, clip_id %s" % (str(cam_id), area_id, total_cnt - fail_cnt, fail_cnt, clip_id))
-							stdout.flush()
+						stdout.write("\rcam_id %s, area_id %s, saved cnt %s, not_in_any_area cnt %s, clip_id %s" % (str(cam_id), area_id, total_cnt - fail_cnt, fail_cnt, clip_id))
+						stdout.flush()
+						cur.close()
+						conn.commit()
 
 					else:
-						print(count * frame_interval, "disrupted")
+						print("\n" + str(count * frame_interval) + "disrupted")
 						count += 1
 						#total_cnt += 1
 						#fail_cnt += 1
@@ -280,12 +290,20 @@ for cam_id, direction in enumerate(all_files):
 					fail_cnt += 1
 				
 			else:
-				print("break because coord is None")
+				print("\nbreak because coord is None")
 				break
 			if cv2.waitKey(10) == 27: # exit if Escape is hit
 				break
 			count += 1
 			total_cnt += 1
+
+pool = ThreadPool(processes = 8)
+pool.map(extract, [[cam_id, direction] for cam_id, direction in enumerate(all_files)])
+pool.close()
+pool.join()
+
+
+
 
 # select specific area name & count from image look up table
 conn = psycopg2.connect(conn_string)
@@ -321,7 +339,7 @@ spec_cat = {}
 
 #	for bolei's code
 per_train = 0.8
-per_val = 0.08
+per_val = 0.09
 per_test = 0.1
 
 data_train = np.array([], dtype=np.uint8).reshape(0, 49152)
@@ -338,7 +356,6 @@ for idx, spec_id in enumerate(results):
 	cur = conn.cursor()
 	query = '''select * from penn_station.image_lookup_%sms where spec_id = '%s'; ''' % (str(frame_interval), spec_id[0])
 	# print(query)
-
 
 	cur.execute(query)
 	images = cur.fetchall()
