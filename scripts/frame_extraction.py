@@ -6,8 +6,15 @@ from sys import stdout
 import psycopg2
 import pickle
 import numpy as np
+import math
 from PIL import Image
+from math import floor
+import hashlib
+import random
 
+
+
+# generating the accurate geo-coordinates for a specific time poing
 def gen_coord(line, time):
 
 	percentage = None
@@ -22,11 +29,50 @@ def gen_coord(line, time):
 		coord_x = (line["points"][index][0] - line["points"][index - 1][0]) * percentage + line["points"][index - 1][0]
 		coord_y = (line["points"][index][1] - line["points"][index - 1][1]) * percentage + line["points"][index - 1][1]
 		return (coord_x, coord_y)
+
+# function to randomly crop images from original in order to perform data augmentation
+def random_crop(image, min_area_per, max_area_per, total_cnt, w_h_ratio_min, w_h_ratio_max):
+
+	width, height, channels = image.shape
+	augmented_images = []
+	augmented_images_infos = []
+
+	# for the original image
+	infos = [True, None, None, None, None]
+	augmented_images.append(image)
+	augmented_images_infos.append(infos)
+
+
+	for cnt in range(total_cnt):
+		w_h_ratio = random.uniform(w_h_ratio_min, w_h_ratio_max)
+		area  = random.uniform(min_area_per, max_area_per)
+
+		w_new = int(floor(math.sqrt(height * width * area * w_h_ratio)))
+		h_new = int(floor(w_new / w_h_ratio))
+
+		# print(width, w_new, height, h_new)
+		random_left_shift = random.randint(0, int((width - w_new)))  # Note: randint() is from uniform distribution.
+		random_down_shift = random.randint(0, int((height - h_new)))
+
+		new_image = image[random_left_shift : w_new + random_left_shift, random_down_shift: h_new + random_down_shift, :]
+		# print(new_image.shape)
+		centerpoint_x = random_left_shift  / 2 + w_new
+		centerpoint_y = random_down_shift / 2 + h_new
+		original      = False
+
+		infos = [original, w_h_ratio, area, centerpoint_x, centerpoint_y]
+
+		augmented_images.append(new_image)
+		augmented_images_infos.append(infos)
+
+	return {"augmented_images": augmented_images, "augmented_images_infos": augmented_images_infos}
+
+
 #preset settings
 frame_interval = 50
+augmentation_split = 8
 
-
-# connect to server database
+# select area for interpolation
 conn_string = "host='localhost' dbname='indoor_position' user='postgres' password='tiancai' port='5432'"
 conn = psycopg2.connect(conn_string)
 cur = conn.cursor()
@@ -37,6 +83,7 @@ areas = cur.fetchall()
 cur.close()
 conn.commit()
 
+# select route id and its corresponding time list
 conn = psycopg2.connect(conn_string)
 cur = conn.cursor()
 query = '''select id, field_3 from penn_station.routes'''
@@ -50,6 +97,7 @@ for item in results:
 	records[item[0]]["time"] = eval(item[1])
 	records[item[0]]["points"] = []
 
+# select coordinates of these routes
 conn = psycopg2.connect(conn_string)
 cur = conn.cursor()
 query = '''select id, (ST_DumpPoints(geom)).path, ST_X(((ST_DumpPoints(geom)).geom)), ST_Y(((ST_DumpPoints(geom)).geom)) from penn_station.routes'''
@@ -92,34 +140,43 @@ fail_cnt  = 0
 output_files = [""] * len(left_files)
 lookup_table = {"2-1": 0, "2-3": 1, "2-4": 2, "2-5": 3, "2-6": 4, "2-8-2": 5, "2-9": 6, "2-10": 7}
 
+
+
 # create table to store image infos
-# conn = psycopg2.connect(conn_string)
-# cur = conn.cursor()
-# query = '''
-# 	drop table if exists penn_station.image_lookup_%sms; create table penn_station.image_lookup_%sms
-# 	(
-# 	  image_name text,
-# 	  id integer,
-# 	  spec_id text,
-# 	  path text,
-# 	  lat double precision,
-# 	  lon double precision
-# 	);
+conn = psycopg2.connect(conn_string)
+cur = conn.cursor()
+query = '''
+	drop table if exists penn_station.image_lookup_%sms; create table penn_station.image_lookup_%sms
+	(
+	  image_name text,
+	  id integer,
+	  spec_id text,
+	  path text,
+	  lat double precision,
+	  lon double precision,
+	  original boolean, 
+	  w_h_ratio text,
+	  area text, 
+	  centerpoint_x text, 
+	  centerpoint_y text
+	);
 
-# 	drop table if exists penn_station.missing; create table penn_station.missing
-# 	(
-# 	  lat double precision,
-# 	  lon double precision
-# 	)
+	drop table if exists penn_station.missing; create table penn_station.missing
+	(
+	  lat double precision,
+	  lon double precision
+	)
 
-# ''' % (str(frame_interval), str(frame_interval))
-# # print(query)
-# cur.execute(query)
-# cur.close()
-# conn.commit()
-# print("--- table penn_station.image_lookup_%sms created" % (str(frame_interval)))
-all_files = [[], forward_files, right_files, back_files]
-all_files = []
+''' % (str(frame_interval), str(frame_interval))
+# print(query)
+cur.execute(query)
+cur.close()
+conn.commit()
+print("--- table penn_station.image_lookup_%sms created" % (str(frame_interval)))
+
+
+all_files = [left_files, forward_files, right_files, back_files]
+# all_files = []
 
 for cam_id, direction in enumerate(all_files):
 	for clip_id in range(len(direction)):
@@ -132,7 +189,13 @@ for cam_id, direction in enumerate(all_files):
 		# 	continue
 		while True:
 			current_line = records[lookup_table[os.path.splitext((os.path.basename(direction[clip_id])))[0]]]
-			vidcap.set(cv2.CAP_PROP_POS_MSEC, (count * frame_interval) )
+
+			# use this one for opencv 2-- cv2.CAP_PROP_POS_MSEC was removed from opencv 3.0
+			vidcap.set(cv2.CAP_PROP_POS_MSEC, (count * frame_interval))
+
+			# use this one for opencv 3
+			# post_frame = cap.get(1)
+
 			current_time = count * 1.0 * frame_interval / 1000
 			coord = gen_coord(current_line, current_time)
 			# print(current_line, count * 1.0 * frame_interval / 1000)
@@ -141,6 +204,7 @@ for cam_id, direction in enumerate(all_files):
 				cur = conn.cursor()
 				query = '''select id from penn_station.areas a where ST_Intersects(ST_PointFromText('POINT(%s %s)', 4326), ST_Transform(a.geom, 4326)) is True''' % (coord[0], coord[1])
 				# print(query)
+
 				cur.execute(query)
 
 				if not cur.rowcount == 0:
@@ -153,19 +217,40 @@ for cam_id, direction in enumerate(all_files):
 						#print(count * frame_interval)
 
 						spec_id  = str(area_id) + str(cam_id)
-						filename = "%s_%s_%s.png" % (spec_id, str(cam_id), count)
-						cv2.imwrite(filename, image)	 # save frame as JPEG file
+						# filename = "%s_%s_%s.png" % (spec_id, str(cam_id), count)	
+						crop_result = random_crop(image, 0.3, 0.6, augmentation_split, 0.8, 1.2)
 
-						conn = psycopg2.connect(conn_string)
-						cur = conn.cursor()
-						query = '''insert into penn_station.image_lookup_%sms values('%s', %s, '%s', '%s', %s, %s)''' % (str(frame_interval), filename, area_id, spec_id, os.path.join(os.getcwd(), filename), coord[0], coord[1])
-						# print(query)
-						cur.execute(query)
-						cur.close()
-						conn.commit()
+						for crop_item in range(augmentation_split):
 
-						stdout.write("\rcam_id %s, area_id %s, saved cnt %s, not_in_any_area cnt %s, clip_id %s" % (str(cam_id), area_id, total_cnt - fail_cnt, fail_cnt, clip_id))
-						stdout.flush()
+							# inserting informations below
+							original_ins, w_h_ratio_ins, area_ins, centerpoint_x_ins, centerpoint_y_ins = crop_result["augmented_images_infos"][crop_item]
+							image_ins = crop_result["augmented_images"][crop_item]
+
+							h = hashlib.new('ripemd160')
+							h.update(str(image))
+							image_name = h.hexdigest()
+							filename_level_1 = image_name[:2]
+							filename_level_2 = image_name[2:4]
+
+							image_dir = os.path.join(os.getcwd(), filename_level_1, filename_level_2)
+
+							if not os.path.exists(image_dir):
+								os.makedirs(image_dir)
+
+							# save frame as png file
+							cv2.imwrite(os.path.join(image_dir, image_name + ".png"), image_ins)	 
+
+							# inserting image infos into database
+							conn = psycopg2.connect(conn_string)
+							cur = conn.cursor()
+							query = '''insert into penn_station.image_lookup_%sms values('%s', %s, '%s', '%s', %s, %s, %s, '%s', '%s', '%s', '%s')''' % (str(frame_interval), image_name, area_id, spec_id, os.path.join(image_dir, image_name), coord[0], coord[1], original_ins, w_h_ratio_ins, area_ins, centerpoint_x_ins, centerpoint_y_ins)
+							# print(query)
+							cur.execute(query)
+							cur.close()
+							conn.commit()
+
+							stdout.write("\rcam_id %s, area_id %s, saved cnt %s, not_in_any_area cnt %s, clip_id %s" % (str(cam_id), area_id, total_cnt - fail_cnt, fail_cnt, clip_id))
+							stdout.flush()
 
 					else:
 						print(count * frame_interval, "disrupted")
@@ -202,13 +287,12 @@ for cam_id, direction in enumerate(all_files):
 			count += 1
 			total_cnt += 1
 
+# select specific area name & count from image look up table
 conn = psycopg2.connect(conn_string)
 cur = conn.cursor()
 query = '''select spec_id, count(spec_id) as cnt1 from penn_station.image_lookup_%sms group by spec_id having count(spec_id) > 100; ''' % str(frame_interval)
-# print(query)
 cur.execute(query)
 results = cur.fetchall()
-
 cur.close()
 conn.commit()
 
