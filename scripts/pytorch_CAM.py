@@ -100,6 +100,16 @@ result = cur.fetchall()
 cur.close()
 conn.commit()
 
+
+# adding new columns
+# conn = psycopg2.connect(conn_string)
+# cur = conn.cursor()
+
+# query = '''ALTER TABLE penn_station.image_lookup_1000ms ADD COLUMN pred0 text, ADD COLUMN pred1 text, ADD COLUMN pred2 text, ADD COLUMN pred3 text, ADD COLUMN pred4 text, ADD COLUMN prob0 double precision, ADD COLUMN prob1 double precision, ADD COLUMN prob2 double precision, ADD COLUMN prob3 double precision, ADD COLUMN prob4 double precision;'''
+# cur.execute(query)
+# cur.close()
+# conn.commit()
+
 for idx, item in enumerate(result):
 
 	# if idx < 100:
@@ -112,14 +122,14 @@ for idx, item in enumerate(result):
 	clip_id  = item[5]
 	clip_count = item[6]
 
-	if not os.path.exists(os.path.join(os.getcwd(), "..", "web", "final", "images", str(cam_id), "orignal")):
-		os.makedirs(os.path.join(os.getcwd(), "..", "web", "final", "images", str(cam_id), "orignal"))
+	if not os.path.exists(os.path.join(os.getcwd(), "..", "web", "final", "images", str(cam_id), "original")):
+		os.makedirs(os.path.join(os.getcwd(), "..", "web", "final", "images", str(cam_id), "original"))
 
 	if not os.path.exists(os.path.join(os.getcwd(), "..", "web", "final", "images", str(cam_id), "heatmap")):
 		os.makedirs(os.path.join(os.getcwd(), "..", "web", "final", "images", str(cam_id), "heatmap"))
 
 	img_pil = Image.open(img_path)
-	img_pil.save(os.path.join(os.getcwd(), "..", "web", "final", "images", str(cam_id), "orignal", str(clip_id) + "_" + str(clip_count) + '.png'))
+	img_pil.save(os.path.join(os.getcwd(), "..", "web", "final", "images", str(cam_id), "original", str(clip_id) + "_" + str(clip_count) + '.png'))
 
 	img_tensor = preprocess(img_pil)
 	img_variable = Variable(img_tensor.unsqueeze(0))
@@ -133,6 +143,14 @@ for idx, item in enumerate(result):
 	print("correct id: " + str(img_spec_id))
 	for i in range(0, 5):
 		print('{:.3f} -> {}'.format(probs[i], classes[idx[i]]))
+
+	conn = psycopg2.connect(conn_string)
+	cur = conn.cursor()
+
+	query = '''UPDATE penn_station.image_lookup_1000ms SET pred0 = '%s', pred1 = '%s', pred2 = '%s', pred3 = '%s', pred4 = '%s', prob0 = %s, prob1 = %s, prob2 = %s, prob3 = %s, prob4 = %s WHERE image_name = '%s'; ''' % (classes[idx[0]], classes[idx[1]], classes[idx[2]], classes[idx[3]], classes[idx[4]], probs[0], probs[1], probs[2], probs[3], probs[4], img_name)
+	cur.execute(query)
+	cur.close()
+	conn.commit()
 
 	# generate class activation mapping for the top1 prediction
 	# print(features_blobs[0].shape, weight_softmax.shape, [idx[0]])

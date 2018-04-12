@@ -21,7 +21,7 @@
 .map-overlay {
     font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
     position: absolute;
-    width: 25%;
+    width: 68%;
     top: 0;
     left: 0;
     padding: 10px;
@@ -38,7 +38,7 @@
 .map-overlay h2 {
     line-height: 24px;
     display: block;
-    margin: 0 0 10px;
+    margin: 0 0 0px;
 }
 
 .map-overlay .legend .bar {
@@ -55,15 +55,82 @@
     margin: 0;
     cursor: ew-resize;
 }
+
+.left-column{
+    position: absolute;
+    width: 27%;
+    height: 100%;
+    right: 0;
+}
+
+.left-column-inner{
+    position: relative;
+    background-color: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.20);
+    border-radius: 3px;
+    margin: 10px;
+    height: 96%;
+}
+
+.left-upper{
+    width: 100%;
+    position: relative;
+    height: 33%;
+    padding: 5px;
+    text-align: center
+}
+
+.middle-upper{
+    width: 100%;
+    position: relative;
+    height: 28%;
+    padding: 5px;
+    text-align: center
+}
+
+.right-upper{
+    width: 100%;
+    position: relative;
+    height: 33%;
+    padding: 5px;
+    text-align: center
+}
+
+.img_preview{
+}
+
+.image_container {
+    position: absolute;
+    top: 50%;
+    width: 100%;
+    transform: translateY(-50%);
+}
+
+
 </style>
 
 <div id='map'></div>
 
+<div class="left-column">
+    <div class="left-column-inner">
+    <div class="left-upper">
+        <div class="image_container"><img class="img_preview" id="original" src="images/0/original/0_2.png" height="200"></div>
+    </div>
+    <div class="middle-upper">
+        <div class="image_container"><img class="img_preview" id="segmentation" src="images/0/segmentation/0_2.png" height="200"></div>
+    </div>
+    <div class="right-upper">
+        <div class="image_container"><img class="img_preview" id="heatmap" src="images/0/heatmap/0_2.png" height="200"></div>
+    </div>
+    </div>
+</div>
+
+
 <div class='map-overlay top'>
     <div class='map-overlay-inner'>
         <h2>Penn Station Space Distinctiveness</h2>
-        <label id='month'></label>
-        <input id='slider' type='range' min='0' max='11' step='1' value='0' />
+        <label id='index'></label>
+        <input id='slider' type='range' min='0' max='1342' step='1' value='0' />
     </div>
     <div class='map-overlay-inner'>
         <div id='legend' class='legend'>
@@ -71,6 +138,7 @@
             <div>Distinctiveness % </div>
         </div>
     </div>
+
 </div>
 
 <script>
@@ -78,33 +146,33 @@ mapboxgl.accessToken = 'pk.eyJ1Ijoid3p0MTAwMSIsImEiOiJjamVyeTRlbXYwY3h3MnFtbjU4N
 var map = new mapboxgl.Map({
     container: 'map',
     style: 'mapbox://styles/mapbox/light-v9',
-    center: [-73.99327978562953, 40.75046843313856],
+    center: [-73.99237978562953, 40.75046843313856],
     zoom: 17
 });
 
-var months = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December'
-];
+var index = [];
+for (var i = 1; i <= 1342; i++) {
+   index.push(i);
+}
+function filterBy(index) {
 
-function filterBy(month) {
-
-    var filters = ['==', 'month', month];
+    var filters = ['>', 'index', index];
     map.setFilter('earthquake-circles', filters);
     map.setFilter('earthquake-labels', filters);
 
-    // Set the label to the month
-    document.getElementById('month').textContent = months[month];
+    // Set the label to the index
+    document.getElementById('index').textContent = index[index];
+}
+
+function getCurrentPoint(index, maxIndex){
+    for (var i = 0; i < maxIndex; i++){
+    // look for the entry with a matching `code` value
+        if (points.features[i].properties.index == index){
+         // we found it
+        // obj[i].name is the matched result
+            return [points.features[i].properties.clip_id, points.features[i].properties.clip_count]
+        }
+    }
 }
 
 map.on('load', function() {
@@ -124,17 +192,29 @@ map.on('load', function() {
     //     console.log(data)
     // });
 
-        // Create a month property value based on time
-        // used to filter against.
-    geojson_file.features = geojson_file.features.map(function(d) {
-        d.properties.month = new Date(d.properties.time).getMonth();
-        return d;
-    });
+        // Create a index property value based on time
+    //     // used to filter against.
+    // geojson_file.features = geojson_file.features.map(function(d) {
+    //     d.properties.index = new Date(d.properties.time).getindex();
+    //     return d;
+    // });
+
+    // points.features = points.features.map(function(d) {
+    //     d.properties.index = new Date(d.properties.time).getindex();
+    //     return d;
+    // });
 
     map.addSource('earthquakes', {
         'type': 'geojson',
         'data': geojson_file
     });
+
+
+    map.addSource('points_source', {
+        'type': 'geojson',
+        'data': points
+    });
+
 
     map.addLayer({
         "id": "lines",
@@ -157,43 +237,43 @@ map.on('load', function() {
         }
     });
 
-    map.addLayer({
-        "id": "points",
-        "source": "point",
-        "type": "circle",
-        "source": {
-            "type": "geojson",
-            "data": {
-                "type": "Feature",
-                "properties": {},
-                "geometry": JSON.parse(points)
-            }
-        },
-        "paint": {
-            "circle-radius": 2,
-            "circle-color": "#007cbf"
-        }
-    });
+    // map.addLayer({
+    //     "id": "points",
+    //     "source": "point",
+    //     "type": "circle",
+    //     "source": {
+    //         "type": "geojson",
+    //         "data": {
+    //             "type": "Feature",
+    //             "properties": {},
+    //             "geometry": JSON.parse(points)
+    //         }
+    //     },
+    //     "paint": {
+    //         "circle-radius": 2,
+    //         "circle-color": "#007cbf"
+    //     }
+    // });
 
     map.addLayer({
         'id': 'earthquake-circles',
         'type': 'circle',
-        'source': 'earthquakes',
+        'source': 'points_source',
         'paint': {
             'circle-color': [
                 'interpolate',
                 ['linear'],
                 ['get', 'mag'],
-                6, '#FCA107',
-                8, '#7F3121'
+                0, '#FCA107',
+                1, '#7F3121'
             ],
             'circle-opacity': 0.75,
             'circle-radius': [
                 'interpolate',
                 ['linear'],
                 ['get', 'mag'],
-                6, 20,
-                8, 40
+                0, 2,
+                1, 10
             ]
         }
     });
@@ -212,13 +292,20 @@ map.on('load', function() {
         }
     });
 
-    // Set filter to first month of the year
+    // Set filter to first index of the year
     // 0 = January
     filterBy(0);
 
     document.getElementById('slider').addEventListener('input', function(e) {
-        var month = parseInt(e.target.value, 10);
-        filterBy(month);
+        var index = parseInt(e.target.value, 10);
+        var a= getCurrentPoint(index, 1342-1)
+        console.log(index, a)
+
+        document.getElementById("heatmap").src=`images/0/original/${a[0]}_${a[1]}.png`;
+        document.getElementById("original").src=`images/0/segmentation/${a[0]}_${a[1]}.png`;
+        document.getElementById("segmentation").src=`images/0/heatmap/${a[0]}_${a[1]}.png`;
+
+        filterBy(index);
     });
 });
 </script>
