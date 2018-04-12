@@ -12,7 +12,7 @@ from math import floor
 import hashlib
 import random
 from multiprocessing.dummy import Pool as ThreadPool
-
+from sklearn.utils import shuffle
 
 # generating the accurate geo-coordinates for a specific time poing
 def gen_coord(line, time):
@@ -145,40 +145,39 @@ fail_cnt  = 0
 lookup_table = {"2-1": 0, "2-3": 1, "2-4": 2, "2-5": 3, "2-6": 4, "2-8-2": 5, "2-9": 6, "2-10": 7}
 
 # create table to store image infos
-conn = psycopg2.connect(conn_string)
-cur = conn.cursor()
-query = '''
-	drop table if exists penn_station.image_lookup_%sms; create table penn_station.image_lookup_%sms
-	(
-	  image_name text,
-	  id integer,
-	  spec_id text,
-	  path text,
-	  lat double precision,
-	  lon double precision,
-	  original boolean, 
-	  w_h_ratio text,
-	  area text, 
-	  centerpoint_x text, 
-	  centerpoint_y text
-	);
+# conn = psycopg2.connect(conn_string)
+# cur = conn.cursor()
+# query = '''
+# 	drop table if exists penn_station.image_lookup_%sms; create table penn_station.image_lookup_%sms
+# 	(
+# 	  image_name text,
+# 	  id integer,
+# 	  spec_id text,
+# 	  path text,
+# 	  lat double precision,
+# 	  lon double precision,
+# 	  original boolean, 
+# 	  w_h_ratio text,
+# 	  area text, 
+# 	  centerpoint_x text, 
+# 	  centerpoint_y text
+# 	);
 
-	drop table if exists penn_station.missing; create table penn_station.missing
-	(
-	  lat double precision,
-	  lon double precision
-	)
+# 	drop table if exists penn_station.missing; create table penn_station.missing
+# 	(
+# 	  lat double precision,
+# 	  lon double precision
+# 	)
 
-''' % (str(frame_interval), str(frame_interval))
-# print(query)
-cur.execute(query)
-cur.close()
-conn.commit()
-print("--- table penn_station.image_lookup_%sms created" % (str(frame_interval)))
+# ''' % (str(frame_interval), str(frame_interval))
+# # print(query)
+# cur.execute(query)
+# cur.close()
+# conn.commit()
+# print("--- table penn_station.image_lookup_%sms created" % (str(frame_interval)))
 
 
 all_files = [left_files, forward_files, right_files, back_files]
-# all_files = []
 
 def extract(input_direction):
 
@@ -247,12 +246,13 @@ def extract(input_direction):
 								os.makedirs(image_dir)
 
 							# save frame as png file
+							image_ins = cv2.resize(image_ins, dsize=(224, 224), interpolation=cv2.INTER_CUBIC)
 							cv2.imwrite(os.path.join(image_dir, image_name + ".png"), image_ins)	 
 
 							# inserting image infos into database
 							conn = psycopg2.connect(conn_string)
 							cur = conn.cursor()
-							query = '''insert into penn_station.image_lookup_%sms values('%s', %s, '%s', '%s', %s, %s, %s, '%s', '%s', '%s', '%s')''' % (str(frame_interval), image_name, area_id, spec_id, os.path.join(image_dir, image_name), coord[0], coord[1], original_ins, w_h_ratio_ins, area_ins, centerpoint_x_ins, centerpoint_y_ins)
+							query = '''insert into penn_station.image_lookup_%sms values('%s', %s, '%s', '%s', %s, %s, %s, '%s', '%s', '%s', '%s')''' % (str(frame_interval), image_name , area_id, spec_id, os.path.join(image_dir, image_name + ".png"), coord[0], coord[1], original_ins, w_h_ratio_ins, area_ins, centerpoint_x_ins, centerpoint_y_ins)
 							# print(query)
 							cur.execute(query)
 							
@@ -297,10 +297,10 @@ def extract(input_direction):
 			count += 1
 			total_cnt += 1
 
-pool = ThreadPool(processes = 8)
-pool.map(extract, [[cam_id, direction] for cam_id, direction in enumerate(all_files)])
-pool.close()
-pool.join()
+# pool = ThreadPool(processes = 4)
+# pool.map(extract, [[cam_id, direction] for cam_id, direction in enumerate(all_files)])
+# pool.close()
+# pool.join()
 
 
 
@@ -313,7 +313,7 @@ cur.execute(query)
 results = cur.fetchall()
 cur.close()
 conn.commit()
-
+print(cur.rowcount)
 spec_cat = {}
 
 # for shitty classifer code
@@ -342,13 +342,13 @@ per_train = 0.8
 per_val = 0.09
 per_test = 0.1
 
-data_train = np.array([], dtype=np.uint8).reshape(0, 49152)
+data_train = np.array([], dtype=np.uint8).reshape(0, 150528)
 label_train = np.array([], dtype=np.uint8)
 
-data_val = np.array([], dtype=np.uint8).reshape(0, 49152)
+data_val = np.array([], dtype=np.uint8).reshape(0, 150528)
 label_val = np.array([], dtype=np.uint8)
 
-data_test = np.array([], dtype=np.uint8).reshape(0, 49152)
+data_test = np.array([], dtype=np.uint8).reshape(0, 150528)
 label_test = np.array([], dtype=np.uint8)
 
 for idx, spec_id in enumerate(results):
@@ -364,7 +364,7 @@ for idx, spec_id in enumerate(results):
 	category = spec_id
 
 	# print(images)
-	data_category = np.array([cv2.resize(np.array(Image.open(fname[3])), dsize=(128, 128), interpolation=cv2.INTER_CUBIC) for fname in images])	
+	data_category = np.array([cv2.resize(np.array(Image.open(fname[3])), dsize=(224, 224), interpolation=cv2.INTER_CUBIC) for fname in images])	
 
 	# data_category = np.load(file_np).astype(np.int8)
 	total_cnt = len(data_category)
@@ -374,9 +374,9 @@ for idx, spec_id in enumerate(results):
 	print (num_train, num_val, num_test)
 	# generate split
 
-	train_category = data_category[:num_train].reshape(-1, 49152)
-	val_category = data_category[num_train:num_train+num_val].reshape(-1, 49152)
-	test_category = data_category[num_train+num_val:num_train+num_val+num_test].reshape(-1, 49152)
+	train_category = data_category[:num_train].reshape(-1, 150528)
+	val_category = data_category[num_train:num_train+num_val].reshape(-1, 150528)
+	test_category = data_category[num_train+num_val:num_train+num_val+num_test].reshape(-1, 150528)
 
 	print(data_train.shape, train_category.shape)
 
@@ -396,6 +396,14 @@ for idx, spec_id in enumerate(results):
 output_dir = os.path.join(os.getcwd(), '..', 'datasplit')
 if not os.path.exists(output_dir):
 	os.makedirs(output_dir)
-np.savez( os.path.join(output_dir, '%s_split_%s.npy' % (num_train, "128")), data_train=data_train, label_train=label_train, data_val=data_val, label_val=label_val, data_test=data_test, label_test=label_test)
+
+data_train, label_train = shuffle(data_train, label_train, random_state=0)
+
+np.savez( os.path.join(output_dir, '%s_split_%s_test.npy' % (num_train, "224")), data_val=data_val, label_val=label_val, data_test=data_test, label_test=label_test)
+np.savez( os.path.join(output_dir, '%s_split_%s_train0.npy' % (num_train, "224")), data_train=data_train[0:29999], label_train=label_train[0:29999])
+np.savez( os.path.join(output_dir, '%s_split_%s_train1.npy' % (num_train, "224")), data_train=data_train[30000:59999], label_train=label_train[30000:59999])
+np.savez( os.path.join(output_dir, '%s_split_%s_train2.npy' % (num_train, "224")), data_train=data_train[60000:], label_train=label_train[60000:])
+# np.savez( os.path.join(output_dir, '%s_split_%s.npy' % (num_train, "128")), data_train=data_train, label_train=label_train, data_val=data_val, label_val=label_val, data_test=data_test, label_test=label_test)
+
 
 
