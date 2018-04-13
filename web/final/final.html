@@ -14,6 +14,11 @@
     <script src="geojson/significant-earthquakes-2015.js"></script>
     <script src="geojson/output_lines.js"></script>
     <script src="geojson/output_points.js"></script>
+    <script
+  src="https://code.jquery.com/jquery-3.3.1.min.js"
+  integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+  crossorigin="anonymous"></script>
+
 </head>
 <body>
 
@@ -21,21 +26,23 @@
 .map-overlay {
     font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
     position: absolute;
-    width: 68%;
+    width: 72%;
     top: 0;
     left: 0;
     padding: 10px;
+
 }
 
 .map-overlay .map-overlay-inner {
-    background-color: #fff;
+    background-color: #1d1d1d;
     box-shadow:0 1px 2px rgba(0, 0, 0, 0.20);
     border-radius: 3px;
     padding: 10px;
-    margin-bottom: 10px;
+    margin-bottom: 3px;
 }
 
 .map-overlay h2 {
+    color: #bbb;
     line-height: 24px;
     display: block;
     margin: 0 0 0px;
@@ -44,7 +51,7 @@
 .map-overlay .legend .bar {
     height: 10px;
     width: 100%;
-    background: linear-gradient(to right, #FCA107, #7F3121);
+    background: linear-gradient(to right, rgb(51, 230, 255), rgb(255, 26, 125));
 }
 
 .map-overlay input {
@@ -65,7 +72,7 @@
 
 .left-column-inner{
     position: relative;
-    background-color: #fff;
+    background-color: #1d1d1d;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.20);
     border-radius: 3px;
     margin: 10px;
@@ -97,6 +104,7 @@
 }
 
 .img_preview{
+    border-radius: 10px;
 }
 
 .image_container {
@@ -125,7 +133,6 @@
     </div>
 </div>
 
-
 <div class='map-overlay top'>
     <div class='map-overlay-inner'>
         <h2>Penn Station Space Distinctiveness</h2>
@@ -135,33 +142,48 @@
     <div class='map-overlay-inner'>
         <div id='legend' class='legend'>
             <div class='bar'></div>
-            <div>Distinctiveness % </div>
+            <div style="color: #bbb;">Model Confidence % </div>
         </div>
     </div>
-
+    <button type="button" id="mistake_button" style="margin: 10px; color: #bbb; background-color: #111; border: none; padding: 5px;">Mistaken Tags</button>
 </div>
 
 <script>
+
+var color_0 = 'rgb(51, 230, 255)';
+var color_1 = 'rgb(255, 26, 125)';
+
+
 mapboxgl.accessToken = 'pk.eyJ1Ijoid3p0MTAwMSIsImEiOiJjamVyeTRlbXYwY3h3MnFtbjU4NTVnMzExIn0.6TR-BNpVbe2WfOh7n3AEaQ';
 var map = new mapboxgl.Map({
     container: 'map',
-    style: 'mapbox://styles/mapbox/light-v9',
+    style: 'mapbox://styles/wzt1001/cjerylqcl6rw62snxdpou64fe',
     center: [-73.99237978562953, 40.75046843313856],
-    zoom: 17
+    bearing: 29,
+    zoom: 17.5
 });
+
+$("#mistake_button").click(function(e){
+    filterBy(null, 'correct')
+})
 
 var index = [];
 for (var i = 1; i <= 1342; i++) {
    index.push(i);
 }
-function filterBy(index) {
+function filterBy(index, condition) {
+    if (condition == 'index'){
+        var filters = ['<', 'index', index];
+        map.setFilter('earthquake-circles', filters);
+        map.setFilter('earthquake-labels', filters);
+        // Set the label to the index
+        document.getElementById('index').textContent = index[index];
 
-    var filters = ['>', 'index', index];
-    map.setFilter('earthquake-circles', filters);
-    map.setFilter('earthquake-labels', filters);
-
-    // Set the label to the index
-    document.getElementById('index').textContent = index[index];
+    }
+    else if (condition == 'correct'){
+        var filter = ['==', 'correct', false];
+        map.setFilter('earthquake-circles', filter);
+     }
 }
 
 function getCurrentPoint(index, maxIndex){
@@ -264,17 +286,23 @@ map.on('load', function() {
                 'interpolate',
                 ['linear'],
                 ['get', 'mag'],
-                0, '#FCA107',
-                1, '#7F3121'
+                0, color_0,
+                0.7, color_0,
+                0.98, color_0,
+                1, color_1
+                // 0, '#FCA107',
+                // 1, '#7F3121'
             ],
-            'circle-opacity': 0.75,
+            'circle-opacity': 0.55,
             'circle-radius': [
                 'interpolate',
                 ['linear'],
                 ['get', 'mag'],
-                0, 2,
-                1, 10
-            ]
+                0, 4,
+                0.7, 4,
+                0.98, 4,
+                1, 5.5
+            ],
         }
     });
 
@@ -294,18 +322,17 @@ map.on('load', function() {
 
     // Set filter to first index of the year
     // 0 = January
-    filterBy(0);
+    filterBy(0, 'index');
 
     document.getElementById('slider').addEventListener('input', function(e) {
         var index = parseInt(e.target.value, 10);
-        var a= getCurrentPoint(index, 1342-1)
-        console.log(index, a)
-
-        document.getElementById("heatmap").src=`images/0/original/${a[0]}_${a[1]}.png`;
+        var a= getCurrentPoint(index, 1342-1);
+        if (a == undefined){a = getCurrentPoint(1340, 1342-1)};
         document.getElementById("original").src=`images/0/segmentation/${a[0]}_${a[1]}.png`;
         document.getElementById("segmentation").src=`images/0/heatmap/${a[0]}_${a[1]}.png`;
+        document.getElementById("heatmap").src=`images/0/original/${a[0]}_${a[1]}.png`;
 
-        filterBy(index);
+        filterBy(index, 'index');
     });
 });
 </script>

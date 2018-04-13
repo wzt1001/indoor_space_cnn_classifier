@@ -70,8 +70,8 @@ with open(output_points, 'wb') as output_file:
 		# 	break
 		print(clip_id[idx], idx, point[0])
 		print(prob0[idx])
-		print(round(float(prob0[idx]), 1))
-		output_file.write('''{"type":"Feature","properties":{"mag": %s, "correct": %s, "index": %s, "clip_id": %s, "clip_count": %s}, "geometry":{"type":"Point","coordinates":[%s, %s]},"id":"us10003mrv"},''' % (round(float(prob0[idx]), 1), correct[idx], idx, clip_id[idx], clip_count[idx], point[0], point[1]))
+		print(round(float(prob0[idx]), 8))
+		output_file.write('''{"type":"Feature","properties":{"mag": %s, "correct": %s, "index": %s, "clip_id": %s, "clip_count": %s}, "geometry":{"type":"Point","coordinates":[%s, %s]},"id":"us10003mrv"},''' % (round(float(prob0[idx]), 8), correct[idx], idx, clip_id[idx], clip_count[idx], point[0], point[1]))
 	output_file.seek(-1, os.SEEK_END)
 	output_file.write('''],"bbox":[-178.7298,-55.755,5,179.1278,59.8935,664]\n}\n''' % ())
 

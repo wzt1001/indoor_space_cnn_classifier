@@ -52,7 +52,7 @@ if torch.cuda.device_count() > 1:
     net = nn.DataParallel(net, device_ids=None)
 net.cuda()
 
-checkpoint = torch.load('ind_net/output/checkpoint.pth_bak.tar')
+checkpoint = torch.load('ind_net/output/checkpoint.pth_bak2.tar')
 best_prec1 = checkpoint['best_prec1']
 net.load_state_dict(checkpoint['state_dict'])
 
@@ -79,7 +79,6 @@ weight_softmax = np.squeeze(params[-2].cpu().data.numpy())
 # )
 
 preprocess = transforms.Compose([
-   transforms.Scale((224, 224)),
    transforms.ToTensor()
 ])
 
@@ -94,7 +93,7 @@ conn_string = "host='localhost' dbname='indoor_position' user='postgres' passwor
 conn = psycopg2.connect(conn_string)
 cur = conn.cursor()
 
-query = '''select path, spec_id, id, image_name, cam_id, clip_id, clip_count from penn_station.image_lookup_1000ms'''
+query = '''select path, spec_id, id, image_name, cam_id, clip_id, clip_count from penn_station.image_lookup_1000ms where cam_id = 0 order by spec_id'''
 cur.execute(query)
 result = cur.fetchall()
 cur.close()
@@ -110,7 +109,16 @@ conn.commit()
 # cur.close()
 # conn.commit()
 
-for idx, item in enumerate(result):
+# data_indoor = np.load('/home/ztwang/ssd_data/data/indoor_space_cnn_classifier/data/penn_station/datasplit/274_split_244_test.npy.npz')
+# data_val = data_indoor['data_val'].astype(np.float32)
+# data_val = data_indoor['data_val'].astype(np.float32)
+# data_val = data_val.reshape((data_val.shape[0], 3, 224, 224))
+# data_val = data_val[9, :, :, :]
+# data_val = np.transpose(data_val, (2, 1, 0))
+# label_val = data_indoor['label_val']
+# label_val = torch.from_numpy(label_val.astype(int))
+
+for index, item in enumerate(result):
 
 	# if idx < 100:
 	# 	continue
@@ -128,21 +136,24 @@ for idx, item in enumerate(result):
 	if not os.path.exists(os.path.join(os.getcwd(), "..", "web", "final", "images", str(cam_id), "heatmap")):
 		os.makedirs(os.path.join(os.getcwd(), "..", "web", "final", "images", str(cam_id), "heatmap"))
 
-	img_pil = Image.open(img_path)
-	img_pil.save(os.path.join(os.getcwd(), "..", "web", "final", "images", str(cam_id), "original", str(clip_id) + "_" + str(clip_count) + '.png'))
+
+	img_pil = cv2.resize(np.array(Image.open(img_path)), dsize=(224, 224), interpolation=cv2.INTER_CUBIC) 
+	# img_pil = Image.open(img_path)
+	# img_pil.save(os.path.join(os.getcwd(), "..", "web", "final", "images", str(cam_id), "original", str(clip_id) + "_" + str(clip_count) + '.png'))
+	img_pil = img_pil.reshape(1, 150528).reshape((1, 3, 224, 224))[0, :, :, :].transpose(1, 2, 0)
 
 	img_tensor = preprocess(img_pil)
 	img_variable = Variable(img_tensor.unsqueeze(0))
-	logit = net(img_variable * 224)
+	logit = net(img_variable * 255)
 
 	h_x = F.softmax(logit).data.squeeze()
 	probs, idx = h_x.sort(0, True)
 	# print(logit.data.max(1, keepdim=True)[1])
 	# print(classes[np.asscalar(logit.data.max(1, keepdim=True)[1].cpu().np())])
 	# output the prediction
-	print("correct id: " + str(img_spec_id))
-	for i in range(0, 5):
-		print('{:.3f} -> {}'.format(probs[i], classes[idx[i]]))
+	print("correct id: " + img_spec_id + ", top1 id:" + str(idx[0]) + " " + classes[idx[0]])
+	# for i in range(0, 5):
+	# 	print('{:.3f} -> {}'.format(probs[i], classes[idx[i]]))
 
 	conn = psycopg2.connect(conn_string)
 	cur = conn.cursor()
@@ -157,9 +168,23 @@ for idx, item in enumerate(result):
 	CAMs = returnCAM(features_blobs[0], weight_softmax, [idx[0]])
 
 	# render the CAM and output
-	print('output CAM.jpg for the top1 prediction: %s' % classes[idx[0]])
+	# print('output CAM.jpg for the top1 prediction: %s' % classes[idx[0]])
+
 	img = cv2.imread(img_path)
 	height, width, _ = img.shape
-	heatmap = cv2.applyColorMap(cv2.resize(CAMs[0],(width, height)), cv2.COLORMAP_JET)
+
+	alpha = 0.7
+	cam_out = cv2.resize(CAMs[0], (224, 224)).reshape(1, 50176).reshape((1, 1, 224, 224))[0, :, :, :].transpose(1, 2, 0)
+	
+	# cam_out = np.concatenate((cam_out, cam_out, cam_out), axis = 2)
+	# # cam_out = cv2.resize(cam_out, (width, height))
+	# background  = np.ones(3, width, height)
+	# added_image = cv2.addWeighted(background, 0.4, overlay, 0.1,0)
+	# print(cam_out)
+	# cv2.addWeighted(cam_out, 0, img, alpha, 0, img)
+	# cv2.imwrite(os.path.join(os.getcwd(), "..", "web", "final", "images", str(cam_id), "heatmap", str(clip_id) + "_" + str(clip_count) + '.png'), img)
+
+	heatmap = cv2.applyColorMap(cv2.resize(cam_out,(width, height)), cv2.COLORMAP_JET)
 	result = heatmap * 0.3 + img * 0.5
 	cv2.imwrite(os.path.join(os.getcwd(), "..", "web", "final", "images", str(cam_id), "heatmap", str(clip_id) + "_" + str(clip_count) + '.png'), result)
+
