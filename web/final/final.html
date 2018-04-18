@@ -2,10 +2,11 @@
 <html>
 <head>
     <meta charset='utf-8' />
-    <title>Create a time slider</title>
+    <title>Pennsylvania Station Indoor Space Evaluation Viewer</title>
     <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
     <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v0.44.2/mapbox-gl.js'></script>
     <script src='https://cdnjs.cloudflare.com/ajax/libs/d3/4.13.0/d3.js' charset='utf-8'></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/echarts/4.0.4/echarts.min.js"></script>
     <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v0.44.2/mapbox-gl.css' rel='stylesheet' />
     <style>
         body { margin:0; padding:0; }
@@ -14,6 +15,10 @@
     <script src="geojson/significant-earthquakes-2015.js"></script>
     <script src="geojson/output_lines.js"></script>
     <script src="geojson/output_points.js"></script>
+    <script src="geojson/output_links.js"></script>
+    <script src="geojson/output_pie.js"></script>
+    <script src="geojson/output_scatter.js"></script>
+    <script src="geojson/output_similar_imgs.js"></script>
     <script
   src="https://code.jquery.com/jquery-3.3.1.min.js"
   integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
@@ -23,13 +28,19 @@
 <body>
 
 <style>
+body{
+    display: flex;
+    overflow: hidden;
+    background-color: #ddd;
+}
 .map-overlay {
     font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
     position: absolute;
-    width: 72%;
+    width: 100%;
     top: 0;
     left: 0;
     padding: 10px;
+    box-sizing: border-box
 
 }
 
@@ -64,88 +75,243 @@
 }
 
 .left-column{
-    position: absolute;
-    width: 27%;
-    height: 100%;
-    right: 0;
-}
-
-.left-column-inner{
+    width: 500px;
+    height: 100vh;
+    float: left;
     position: relative;
     background-color: #1d1d1d;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.20);
-    border-radius: 3px;
-    margin: 10px;
-    height: 96%;
+    box-sizing: border-box;
+}
+
+.middle-column{
+    position: relative;
+    width: 800px;
+    height: 100vh;
+    float: none;
+}
+
+.right-column{
+    width: 300px;
+    height: 100vh;
+    float: right;
+    background-color: #1d1d1d;
+    box-sizing: border-box;
+}
+
+.right-column-inner{
+    position: relative;
+    background-color: #1d1d1d;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.20);
+    /*border-radius: 3px;*/
+    /*margin: 10px;*/
+    height: 100%;
+    box-sizing: border-box;
+    padding: 10px 0;
+
+}
+
+.right-upper{
+    width: 100%;
+    position: absolute;
+    height: 33%;
+    padding: 5px;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.right-middle{
+    width: 100%;
+    position: absolute;
+    height: 28%;
+    padding: 5px;
+    top:50%;
+    transform: translateY(-50%);
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.right-lower{
+    width: 100%;
+    position: absolute;
+    height: 33%;
+    padding: 5px;
+    bottom: 0;
+    text-align: center;
+    box-sizing: border-box;
 }
 
 .left-upper{
     width: 100%;
     position: relative;
-    height: 33%;
+    height: 24%;
     padding: 5px;
-    text-align: center
+    text-align: center;
+    box-sizing: border-box;
+    margin-bottom: 1vh;
 }
 
-.middle-upper{
+.left-middle{
     width: 100%;
     position: relative;
-    height: 28%;
-    padding: 5px;
-    text-align: center
+    height: 50%;
+    padding: 20px;
+    text-align: center;
+    box-sizing: border-box;
+    margin-bottom: 2vh;
 }
 
-.right-upper{
+.left-lower{
     width: 100%;
     position: relative;
-    height: 33%;
+    height: 17%;
     padding: 5px;
-    text-align: center
+    bottom: 0;
+    text-align: center;
+    box-sizing: border-box;
 }
 
 .img_preview{
     border-radius: 10px;
+    width: 200px;
+    -webkit-filter: grayscale(60%); /* Safari 6.0 - 9.0 */
+    filter: grayscale(60%);
 }
 
 .image_container {
-    position: absolute;
+    position: relative;
     top: 50%;
     width: 100%;
     transform: translateY(-50%);
 }
 
+.image_title{
+    color: #bbb;
+    font: arial;
+    padding: 5px;
+    margin: 0;
+    font-style: oblique;
+}
+
+.charts{
+    width: 100%;
+    padding: 10px;
+    position: absolute;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.chart-container{
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.vl {
+    border-left: 2px solid white;
+    /*height: 100%;*/
+    position: absolute;
+    top: 20px;
+    bottom: 20px;
+    left: 100px;
+    opacity: 0.5;
+    box-shadow:0 1px 2px rgba(0, 0, 0, 0.20);
+}
+
+.image-grid-item {
+    background-image: url("http://imageshack.us/a/img641/9127/borderbottomt.jpg"), url("http://imageshack.us/a/img825/9262/borderrighto.jpg");
+    background-position: center bottom, center right;
+    background-repeat:no-repeat;
+    float: left;
+    padding: 5px;
+    width: 20%;
+    height: 18%;
+}
+
+.grid-container {
+    padding: 0 5%;
+    display:inline-flex;
+    width:100%;
+    /*margin:10px;*/
+}
 
 </style>
-
-<div id='map'></div>
-
 <div class="left-column">
-    <div class="left-column-inner">
     <div class="left-upper">
-        <div class="image_container"><img class="img_preview" id="original" src="images/0/original/0_2.png" height="200"></div>
+        <div class="chart-container">
+            <div class="charts" id="pie_chart" ></div>
+        </div>
+        <p class="image_title" style="padding: 0"> Influencing Segment</p>
     </div>
-    <div class="middle-upper">
-        <div class="image_container"><img class="img_preview" id="segmentation" src="images/0/segmentation/0_2.png" height="200"></div>
+    <div class="left-middle">
+        <div class="chart-container">
+            <div class="charts" id="scatter_chart"></div>
+        </div>
+        <p class="image_title" style="padding: 0"> Signicant Segment Appearances</p>
+        <div class="vl"></div>
     </div>
-    <div class="right-upper">
-        <div class="image_container"><img class="img_preview" id="heatmap" src="images/0/heatmap/0_2.png" height="200"></div>
-    </div>
+    <div class="left-lower">
+        <!-- <div class="chart-container">
+            <div class="charts" id="ranking_chart"></div>
+        </div> -->
+        <div class="grid-container">
+            <img class="image-grid-item" id='image-grid-1' src="images/0/original/5_224.jpg" height='70' alt="" />
+            <img class="image-grid-item" id='image-grid-2' src="images/0/original/5_221.jpg" height='70' alt="" />
+            <img class="image-grid-item" id='image-grid-3' src="images/0/original/5_335.jpg" height='70' alt="" />
+            <img class="image-grid-item" id='image-grid-4' src="images/0/original/5_321.jpg" height='70' alt="" />
+        </div>
+        <div class="grid-container">
+            <img class="image-grid-item" id='image-grid-5' src="images/3/original/0_15.jpg" height='70' alt="" />
+            <img class="image-grid-item" id='image-grid-6' src="images/3/original/0_14.jpg" height='70' alt="" />
+            <img class="image-grid-item" id='image-grid-7' src="images/3/original/2_10.jpg" height='70' alt="" />
+            <img class="image-grid-item" id='image-grid-8' src="images/3/original/2_2.jpg" height='70' alt="" />
+        </div>
+        <p class="image_title" style="padding: 0"> Similar Scenes</p>
     </div>
 </div>
 
-<div class='map-overlay top'>
-    <div class='map-overlay-inner'>
-        <h2>Penn Station Space Distinctiveness</h2>
-        <label id='index'></label>
-        <input id='slider' type='range' min='0' max='1342' step='1' value='0' />
+<div class='middle-column'>
+    <div id='map'>
+        
     </div>
-    <div class='map-overlay-inner'>
-        <div id='legend' class='legend'>
-            <div class='bar'></div>
-            <div style="color: #bbb;">Model Confidence % </div>
+
+    <div class='map-overlay top'>
+        <div class='map-overlay-inner'>
+            <h2>Penn Station Spatial Distinctiveness Evaluation</h2>
+            <label id='index'></label>
+            <input id='slider' type='range' min='0' max='1342' step='1' value='0' />
+        </div>
+        <div class='map-overlay-inner'>
+            <div id='legend' class='legend'>
+                <div class='bar'></div>
+                <div style="color: #bbb;">Model Confidence % </div>
+            </div>
+        </div>
+        <button type="button" id="mistake_button" style="margin: 10px; color: #bbb; background-color: #111; border: none; padding: 7px 16px;">Mistaken Tags</button>
+    </div>
+</div>
+
+<div class="right-column">
+    <div class="right-column-inner">
+    <div class="right-upper">
+        <div class="image_container">
+            <img class="img_preview" id="original" src="images/0/original/0_2.jpg" height="170">
+            <p class="image_title">Scene Segmentation</p>
         </div>
     </div>
-    <button type="button" id="mistake_button" style="margin: 10px; color: #bbb; background-color: #111; border: none; padding: 5px;">Mistaken Tags</button>
+    <div class="right-middle">
+        <div class="image_container">
+            <img class="img_preview" id="segmentation" src="images/0/segmentation/0_2.jpg" height="170">
+            <p class="image_title">Class Activation Map</p>
+        </div>
+    </div>
+    <div class="right-lower">
+        <div class="image_container">
+            <img class="img_preview" id="heatmap" src="images/0/heatmap/0_2.jpg" height="170">
+            <p class="image_title">Video Frame Image</p>
+        </div>
+    </div>
+    </div>
 </div>
 
 <script>
@@ -158,10 +324,12 @@ mapboxgl.accessToken = 'pk.eyJ1Ijoid3p0MTAwMSIsImEiOiJjamVyeTRlbXYwY3h3MnFtbjU4N
 var map = new mapboxgl.Map({
     container: 'map',
     style: 'mapbox://styles/wzt1001/cjerylqcl6rw62snxdpou64fe',
-    center: [-73.99237978562953, 40.75046843313856],
+    center: [-73.993291, 40.750438],
     bearing: 29,
-    zoom: 17.5
+    zoom: 16.8
 });
+map.dragRotate.disable();
+map.touchZoomRotate.disableRotation();
 
 $("#mistake_button").click(function(e){
     filterBy(null, 'correct')
@@ -174,8 +342,10 @@ for (var i = 1; i <= 1342; i++) {
 function filterBy(index, condition) {
     if (condition == 'index'){
         var filters = ['<', 'index', index];
+        var filters_link = ['==', 'index', index];
         map.setFilter('earthquake-circles', filters);
         map.setFilter('earthquake-labels', filters);
+        map.setFilter('links', filters_link);
         // Set the label to the index
         document.getElementById('index').textContent = index[index];
 
@@ -183,7 +353,7 @@ function filterBy(index, condition) {
     else if (condition == 'correct'){
         var filter = ['==', 'correct', false];
         map.setFilter('earthquake-circles', filter);
-     }
+    }
 }
 
 function getCurrentPoint(index, maxIndex){
@@ -198,33 +368,6 @@ function getCurrentPoint(index, maxIndex){
 }
 
 map.on('load', function() {
-
-    // Data courtesy of http://earthquake.usgs.gov/
-    // Query for significant earthquakes in 2015 URL request looked like this:
-    // http://earthquake.usgs.gov/fdsnws/event/1/query
-    //    ?format=geojson
-    //    &starttime=2015-01-01
-    //    &endtime=2015-12-31
-    //    &minmagnitude=6'
-    //
-    // Here we're using d3 to help us make the ajax request but you can use
-    // Any request method (library or otherwise) you wish.
-    // d3.json(geojson_file, function(err, data) {
-    //     if (err) throw err;
-    //     console.log(data)
-    // });
-
-        // Create a index property value based on time
-    //     // used to filter against.
-    // geojson_file.features = geojson_file.features.map(function(d) {
-    //     d.properties.index = new Date(d.properties.time).getindex();
-    //     return d;
-    // });
-
-    // points.features = points.features.map(function(d) {
-    //     d.properties.index = new Date(d.properties.time).getindex();
-    //     return d;
-    // });
 
     map.addSource('earthquakes', {
         'type': 'geojson',
@@ -259,23 +402,6 @@ map.on('load', function() {
         }
     });
 
-    // map.addLayer({
-    //     "id": "points",
-    //     "source": "point",
-    //     "type": "circle",
-    //     "source": {
-    //         "type": "geojson",
-    //         "data": {
-    //             "type": "Feature",
-    //             "properties": {},
-    //             "geometry": JSON.parse(points)
-    //         }
-    //     },
-    //     "paint": {
-    //         "circle-radius": 2,
-    //         "circle-color": "#007cbf"
-    //     }
-    // });
 
     map.addLayer({
         'id': 'earthquake-circles',
@@ -320,6 +446,162 @@ map.on('load', function() {
         }
     });
 
+
+    map.addLayer({
+        "id": "links",
+        "type": "line",
+        "source": {
+            "type": "geojson",
+            "data": links
+        },
+        "layout": {
+            "line-join": "round",
+            "line-cap": "round"
+        },
+        "paint": {
+            "line-color": "#eee",
+            "line-width": ['get', 'line-width']
+        }
+    });
+
+    // initiate pie chart
+    var pie_chart = echarts.init(document.getElementById('pie_chart'));
+    var option_pie = {
+        // title: {
+        //     textBaseline: 'middle',
+        //     bottom: '15px',
+        //     left: '33%',
+        //     text: 'Influencing Segment',
+        //     textStyle: {
+        //         color: "#bbb",
+        //         fontStyle: "oblique",
+        //         fontSize: 15
+        //     }
+        // },
+
+        tooltip : {
+            trigger: 'item',
+            formatter: "{a} <br/>{b} : {c} ({d}%)"
+        },
+
+        visualMap: {
+            show: false,
+            min: 80,
+            max: 500,
+            inRange: {
+                colorLightness: [0.5, 1]
+            }
+        },
+        series : [
+            {
+                name:'factor',
+                type:'pie',
+                radius : '80%',
+                center: ['50%', '53%'],
+                data:pie_data[0].slice(1, 5).sort(function (a, b) { return a.value - b.value; }),
+                roseType: 'radius',
+                label: {
+                    normal: {
+                        textStyle: {
+                            color: 'rgba(255, 255, 255, 0.6)'
+                        }
+                    }
+                },
+                labelLine: {
+                    normal: {
+                        lineStyle: {
+                            color: 'rgba(255, 255, 255, 0.3)'
+                        },
+                        smooth: 0.2,
+                        length: 5,
+                        length2: 10
+                    }
+                },
+                itemStyle: {
+                    normal: {
+                        color: 'rgb(180, 150, 150)',
+                        shadowBlur: 200,
+                        shadowColor: 'rgba(0, 0, 0, 0.8)'
+                    }
+                },
+
+                animationType: 'scale',
+                animation: true,
+                animationDuration: 300,
+                animationEasing: 'elasticOut',
+                animationDelay: function (idx) {
+                    return Math.random() * 1000;
+                }
+            }
+        ]
+    };
+    pie_chart.setOption(option_pie);
+
+    var scatter_chart = echarts.init(document.getElementById('scatter_chart'));
+    // app.title = '单轴散点图';
+
+    var hours = scatter_data_orginal['hours'];
+    var days = scatter_data_orginal['days'];
+    console.log(days.length)
+    var scatter_data = scatter_data_orginal['scatter_data'];
+    console.log(scatter_data.length)
+
+    option_scatter = {
+        tooltip: {
+            position: 'top'
+        },
+        title: [],
+        singleAxis: [],
+        series: [],
+        color: ['#d8bcb3', '#ccb0a7', '#a89995', '#b79d94', '#ad948c', '#d8c5c0']
+    };
+
+    echarts.util.each(days, function (day, idx) {
+        option_scatter.title.push({
+            textBaseline: 'middle',
+            top: (idx + 0.5) * 100 / days.length + '%',
+            text: day,
+            textStyle: {
+                color: "#bbb",
+                fontStyle: "oblique",
+                fontSize: 12
+            }
+        });
+
+        option_scatter.singleAxis.push({
+            left: 75,
+            type: 'category',
+            boundaryGap: false,
+            data: hours,
+            top: (idx * 100 / days.length + 5) + '%',
+            height: (100 / days.length - 10) + '%',
+            axisLabel: {
+                interval: 4
+            },
+            nameTextStyle: {
+                color: "#bbb"
+            }
+        });
+        // option_scatter.singleAxis.nameTextStyle.color = '#ddd'
+        option_scatter.series.push({
+            singleAxisIndex: idx,
+            coordinateSystem: 'singleAxis',
+            type: 'scatter',
+            data: [],
+            symbolSize: function (dataItem) {
+                return dataItem[1] * 2;
+            }
+        });
+    });
+
+    echarts.util.each(scatter_data, function (dataItem) {
+        // console.log(dataItem[0])
+        option_scatter.series[dataItem[0]].data.push([dataItem[1], dataItem[2]]);
+        // option_scatter.series[dataItem[0]].data.itemStyle = '#ddd'
+    });
+
+    scatter_chart.setOption(option_scatter);
+
     // Set filter to first index of the year
     // 0 = January
     filterBy(0, 'index');
@@ -328,11 +610,23 @@ map.on('load', function() {
         var index = parseInt(e.target.value, 10);
         var a= getCurrentPoint(index, 1342-1);
         if (a == undefined){a = getCurrentPoint(1340, 1342-1)};
-        document.getElementById("original").src=`images/0/segmentation/${a[0]}_${a[1]}.png`;
-        document.getElementById("segmentation").src=`images/0/heatmap/${a[0]}_${a[1]}.png`;
-        document.getElementById("heatmap").src=`images/0/original/${a[0]}_${a[1]}.png`;
-
+        document.getElementById("original").src=`images/0/segmentation/${a[0]}_${a[1]}.jpg`;
+        document.getElementById("segmentation").src=`images/0/heatmap/${a[0]}_${a[1]}.jpg`;
+        document.getElementById("heatmap").src=`images/0/original/${a[0]}_${a[1]}.jpg`;
+        option_pie.series[0].data = pie_data[index].slice(1, 5).sort(function (a, b) { return a.value - b.value;});
+        console.log(pie_data[index].slice(1, 5))
+        console.log(option_pie)
+        pie_chart.setOption(option_pie);
         filterBy(index, 'index');
+        $('.vl').css('left', (100 + (index * 1.0 / 1341) * ($('.left-column').width() - 140)) + 'px');
+        $('#image-grid-1').attr('src', output_similar_imgs[index][0])
+        $('#image-grid-2').attr('src', output_similar_imgs[index][1])
+        $('#image-grid-3').attr('src', output_similar_imgs[index][2])
+        $('#image-grid-4').attr('src', output_similar_imgs[index][3])
+        $('#image-grid-5').attr('src', output_similar_imgs[index][4])
+        $('#image-grid-6').attr('src', output_similar_imgs[index][5])
+        $('#image-grid-7').attr('src', output_similar_imgs[index][6])
+        $('#image-grid-8').attr('src', output_similar_imgs[index][7])
     });
 });
 </script>

@@ -2,4 +2,7 @@ data/
 scripts/pytorch_classifiers/data
 scripts/ind_net/models/
 scripts/ind_net/output/
-web/final/images/
+web/final/images_not_resized/
+scripts/semantic-segmentation-pytorch/data/
+scripts/semantic-segmentation-pytorch/baseline-resnet50_dilated8-ppm_bilinear_deepsup/
+scripts/ind_net/output/
